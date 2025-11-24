@@ -15,7 +15,7 @@ import pickle
 from typing import Tuple, Set
 
 import pandas as pd
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, classification_report
 
 
 DEFAULT_DATA = "test_set.csv"
@@ -51,6 +51,18 @@ def load_test_indices(split_path: str) -> Set[int]:
 	if "index" not in df.columns or "split" not in df.columns:
 		raise ValueError("Split indices file must contain 'index' and 'split' columns.")
 	return set(df[df["split"] == "test"]["index"].astype(int).tolist())
+
+
+def load_split_counts(split_path: str) -> Tuple[int, int]:
+	"""Return (train_count, test_count) from the split indices CSV."""
+	if not os.path.exists(split_path):
+		return None, None
+	df = pd.read_csv(split_path)
+	if "split" not in df.columns:
+		return None, None
+	train_count = int((df["split"] == "train").sum())
+	test_count = int((df["split"] == "test").sum())
+	return train_count, test_count
 
 
 def load_artifacts(vectorizer_path: str, model_path: str):
@@ -146,10 +158,30 @@ def main():
 	recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
 	f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
+	# Determine sizes for reporting
+	report_test_size = len(labels)
+	train_size, test_size_from_split = load_split_counts(args.split_indices)
+
+	print("\n" + "=" * 70)
+	print("TEST SET PERFORMANCE (evaluated on held-out test split)")
+	print("This is the accuracy, precision, recall, and f1 score used against the test set; no training data is present in this testing set")
+	print("=" * 70)
+	print(f"Levels: {'2 (binary)' if args.binary else '3 (multiclass)'}")
+	if train_size is not None and test_size_from_split is not None:
+		print(f"Training size: {train_size}, Testing size: {test_size_from_split}")
+	else:
+		print(f"Training size: unknown, Testing size: {report_test_size}")
 	print(f"Accuracy: {accuracy:.4f}")
 	print(f"Precision: {precision:.4f}")
 	print(f"Recall: {recall:.4f}")
 	print(f"F1: {f1:.4f}")
+	# Full validation report
+	if args.binary:
+		print("\nClassification report (binary: 0=legit, 1=recruitment-risk):")
+		print(classification_report(y_true, y_hat, target_names=["legit", "recruitment-risk"], digits=3))
+	else:
+		print("\nClassification report (3-class: 0=legit, 1=suspicious, 2=fraudulent):")
+		print(classification_report(labels, y_pred, digits=3))
 
 
 if __name__ == "__main__":

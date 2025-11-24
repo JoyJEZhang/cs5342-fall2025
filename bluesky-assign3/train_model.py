@@ -127,17 +127,25 @@ def train(texts: pd.Series, labels: pd.Series, test_count: int, data_used_for_tr
 	)
 	model.fit(x_train_vec, y_train)
 
-	# Validation summary
-	# Evaluate on held-out validation set and print standard metrics
-	y_pred = model.predict(x_val_vec)
-	acc = accuracy_score(y_val, y_pred)
-	print(f"Validation accuracy: {acc:.4f}")
+	# Training-set summary ONLY (as requested)
+	# Evaluate the model against the TRAINING split and report metrics
+	y_pred_train = model.predict(x_train_vec)
+	print("\n" + "=" * 70)
+	print("TRAINING SET PERFORMANCE (evaluated on training split)")
+	print("This is the accuracy, precision, recall, and f1 score used against the training set")
+	print("=" * 70)
 	if binary:
+		from sklearn.metrics import classification_report
+		acc_train = accuracy_score(y_train, y_pred_train)
+		print(f"Accuracy: {acc_train:.4f}")
 		print("\nClassification report (binary: 0=legit, 1=recruitment-risk):")
-		print(classification_report(y_val, y_pred, target_names=["legit", "recruitment-risk"], digits=3))
+		print(classification_report(y_train, y_pred_train, target_names=["legit", "recruitment-risk"], digits=3))
 	else:
+		from sklearn.metrics import classification_report
+		acc_train = accuracy_score(y_train, y_pred_train)
+		print(f"Accuracy: {acc_train:.4f}")
 		print("\nClassification report (labels: 0=legit, 1=suspicious, 2=fraudulent):")
-		print(classification_report(y_val, y_pred, digits=3))
+		print(classification_report(y_train, y_pred_train, digits=3))
 
 	return vectorizer, model, train_idx, test_idx
 
