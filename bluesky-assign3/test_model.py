@@ -18,10 +18,12 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, classification_report
 
 
-DEFAULT_DATA = "test_set.csv"
-DEFAULT_VECTORIZER = "vectorizer.pkl"
-DEFAULT_MODEL = "fraud_model.pkl"
-DEFAULT_SPLIT_INDICES = "train_test_split_indices.csv"
+DEFAULT_DATA_DIR = "data"
+DEFAULT_MODEL_DIR = "model_files"
+DEFAULT_DATA = f"{DEFAULT_DATA_DIR}/test_set.csv"
+DEFAULT_VECTORIZER = f"{DEFAULT_MODEL_DIR}/vectorizer.pkl"
+DEFAULT_MODEL = f"{DEFAULT_MODEL_DIR}/fraud_model.pkl"
+DEFAULT_SPLIT_INDICES = f"{DEFAULT_DATA_DIR}/train_test_split_indices.csv"
 
 
 def load_data(path: str, binary: bool) -> Tuple[pd.Series, pd.Series]:
