@@ -183,6 +183,35 @@ def main():
 		print("\nClassification report (3-class: 0=legit, 1=suspicious, 2=fraudulent):")
 		print(classification_report(labels, y_pred, digits=3))
 
+	# Print qualitative examples (2-3 each category)
+	def label_name(v: int) -> str:
+		return "SCAM" if int(v) == 1 else "SAFE"
+
+	def preview(text: str, limit: int = 200) -> str:
+		t = " ".join(str(text).split())
+		return t if len(t) <= limit else t[:limit] + "..."
+
+	def print_examples(title: str, idxs):
+		print(f"\n{title}:")
+		if len(idxs) == 0:
+			print("  (none)")
+			return
+		for i in idxs[:3]:
+			txt = texts.iloc[i]
+			print(f"  - [{i}] Pred: {label_name(y_hat[i])}, True: {label_name(y_true[i])}")
+			print(f"    Text: {preview(txt)}")
+
+	# Build index lists
+	tn_idxs = [i for i in range(total) if y_hat[i] == 0 and y_true[i] == 0]
+	tp_idxs = [i for i in range(total) if y_hat[i] == 1 and y_true[i] == 1]
+	fn_idxs = [i for i in range(total) if y_hat[i] == 0 and y_true[i] == 1]
+	fp_idxs = [i for i in range(total) if y_hat[i] == 1 and y_true[i] == 0]
+
+	print_examples("Correct SAFE (True Negatives)", tn_idxs)
+	print_examples("Correct SCAM (True Positives)", tp_idxs)
+	print_examples("Incorrect SAFE (False Negatives)", fn_idxs)
+	print_examples("Incorrect SCAM (False Positives)", fp_idxs)
+
 
 if __name__ == "__main__":
 	main()
