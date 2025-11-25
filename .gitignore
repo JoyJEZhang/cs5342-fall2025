@@ -1,0 +1,4 @@
+# Model/vectorizer artifacts
+*.pkl
+
+

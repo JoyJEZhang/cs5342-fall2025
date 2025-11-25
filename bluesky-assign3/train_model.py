@@ -23,9 +23,11 @@ from sklearn.model_selection import StratifiedShuffleSplit, ShuffleSplit
 from sklearn.metrics import classification_report, accuracy_score
 
 
-DEFAULT_DATA = "cleaned_training_data.csv"
-VECTORIZER_OUT = "vectorizer.pkl"
-MODEL_OUT = "fraud_model.pkl"
+DEFAULT_DATA_DIR = "data"
+DEFAULT_MODEL_DIR = "model_files"
+DEFAULT_DATA = os.path.join(DEFAULT_DATA_DIR, "cleaned_training_data.csv")
+VECTORIZER_OUT = os.path.join(DEFAULT_MODEL_DIR, "vectorizer.pkl")
+MODEL_OUT = os.path.join(DEFAULT_MODEL_DIR, "fraud_model.pkl")
 
 
 def load_data(path: str) -> Tuple[pd.Series, pd.Series]:
@@ -129,11 +131,14 @@ def train(texts: pd.Series, labels: pd.Series, data_used_for_training: int, bina
 
 def save_artifacts(vectorizer, model, out_dir: str):
 	"""Persist model artifacts to the specified directory."""
-	# Ensure the output directory exists
-	os.makedirs(out_dir, exist_ok=True)
+	# Ensure the output directories exist
+	model_dir = os.path.join(out_dir, DEFAULT_MODEL_DIR)
+	data_dir = os.path.join(out_dir, DEFAULT_DATA_DIR)
+	os.makedirs(model_dir, exist_ok=True)
+	os.makedirs(data_dir, exist_ok=True)
 	# Save vectorizer and model as pickles for later inference in the labeler
-	vec_path = os.path.join(out_dir, VECTORIZER_OUT)
-	mod_path = os.path.join(out_dir, MODEL_OUT)
+	vec_path = os.path.join(out_dir, VECTORIZER_OUT)  # model_files/vectorizer.pkl
+	mod_path = os.path.join(out_dir, MODEL_OUT)       # model_files/fraud_model.pkl
 	with open(vec_path, "wb") as f:
 		pickle.dump(vectorizer, f)
 	with open(mod_path, "wb") as f:
@@ -194,7 +199,9 @@ def main():
 
 	# Save splits for reproducibility
 	# (a) Save index membership for train vs. test
-	split_path = os.path.join(args.out_dir, "train_test_split_indices.csv")
+	data_dir = os.path.join(args.out_dir, DEFAULT_DATA_DIR)
+	os.makedirs(data_dir, exist_ok=True)
+	split_path = os.path.join(data_dir, "train_test_split_indices.csv")
 	pd.DataFrame({
 		"index": list(train_idx) + list(test_idx),
 		"split": ["train"] * len(train_idx) + ["test"] * len(test_idx),
@@ -204,8 +211,8 @@ def main():
 	# Also save explicit CSVs
 	# (b) Save the actual records for train and test so users can inspect or reuse them
 	df_all = pd.DataFrame({"text": texts, "label": labels})
-	train_csv = os.path.join(args.out_dir, "train_set.csv")
-	test_csv = os.path.join(args.out_dir, "test_set.csv")
+	train_csv = os.path.join(data_dir, "train_set.csv")
+	test_csv = os.path.join(data_dir, "test_set.csv")
 	df_all.iloc[train_idx].to_csv(train_csv, index=False)
 	df_all.iloc[test_idx].to_csv(test_csv, index=False)
 	print(f"Saved train set to {train_csv}")
