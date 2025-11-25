@@ -45,25 +45,6 @@ def load_data(path: str) -> Tuple[pd.Series, pd.Series]:
 	return texts, labels
 
 
-def stratified_fixed_split(texts: pd.Series, labels: pd.Series, test_count: int, random_state: int = 42):
-	"""Create a fixed-size (test_count) stratified split. Falls back to non-stratified if needed."""
-	# Guardrails: require a sensible test set size
-	n_samples = len(texts)
-	if test_count <= 0 or test_count >= n_samples:
-		raise ValueError(f"test_count must be in (0, {n_samples}), got {test_count}")
-	try:
-		# Prefer stratified split so label proportions are preserved in train and test
-		split = StratifiedShuffleSplit(n_splits=1, test_size=test_count, random_state=random_state)
-		for train_idx, test_idx in split.split(texts, labels):
-			return train_idx, test_idx
-	except Exception:
-		# Fallback: non-stratified fixed-size split
-		# (Useful when stratification is impossible due to class scarcity)
-		rs = ShuffleSplit(n_splits=1, test_size=test_count, random_state=random_state)
-		for train_idx, test_idx in rs.split(texts):
-			return train_idx, test_idx
-	raise RuntimeError("Failed to create a train/test split")
-
 def stratified_fixed_train(texts: pd.Series, labels: pd.Series, train_count: int, random_state: int = 42):
 	"""
 	Create a training set of size data_used_for_training via random sampling (stratified when possible).
@@ -85,7 +66,7 @@ def stratified_fixed_train(texts: pd.Series, labels: pd.Series, train_count: int
 	raise RuntimeError("Failed to create a train/test split")
 
 
-def train(texts: pd.Series, labels: pd.Series, test_count: int, data_used_for_training: int = 0, binary: bool = False):
+def train(texts: pd.Series, labels: pd.Series, data_used_for_training: int, binary: bool = False):
 	"""Train TF-IDF + Logistic Regression with a fixed-size test set.
 	If binary=True, collapse labels {1,2} -> 1 and 0 -> 0.
 	"""
@@ -94,12 +75,8 @@ def train(texts: pd.Series, labels: pd.Series, test_count: int, data_used_for_tr
 		labels = labels.map(lambda v: 1 if int(v) in (1, 2) else 0)
 
 	# Choose split strategy:
-	# - If data_used_for_training > 0, randomly sample N rows for training (stratified when possible)
-	# - Otherwise, create a fixed-size test split (stratified when possible)
-	if data_used_for_training and data_used_for_training > 0:
-		train_idx, test_idx = stratified_fixed_train(texts, labels, train_count=data_used_for_training, random_state=42)
-	else:
-		train_idx, test_idx = stratified_fixed_split(texts, labels, test_count=test_count, random_state=42)
+	# - Randomly sample N rows for training (stratified when possible), remaining used for test
+	train_idx, test_idx = stratified_fixed_train(texts, labels, train_count=data_used_for_training, random_state=42)
 	# Partition text and labels into train and validation folds
 	x_train, x_val = texts.iloc[train_idx], texts.iloc[test_idx]
 	y_train, y_val = labels.iloc[train_idx], labels.iloc[test_idx]
@@ -181,13 +158,6 @@ def main():
 		default=".",
 		help="Directory to write model artifacts (default: project root)",
 	)
-	# Size of the validation set when using a random stratified split
-	parser.add_argument(
-		"--test_count",
-		type=int,
-		default=100,
-		help="Number of posts to reserve for test set (default: 100)",
-	)
 	# Specify fraction of rows to use for training in [0,1] (randomly sampled, stratified when possible).
 	# If > 0, overrides --test_count.
 	parser.add_argument(
@@ -208,17 +178,16 @@ def main():
 	# 1) Load raw text and labels from CSV
 	texts, labels = load_data(args.data)
 	# Compute absolute train size from fraction if provided
-	train_count_from_frac = 0
-	if args.data_used_for_training and args.data_used_for_training > 0:
-		n_samples = len(texts)
-		if not (0 < args.data_used_for_training < 1):
-			raise ValueError("--data_used_for_training must be a fraction in (0,1)")
-		train_count_from_frac = int(round(n_samples * args.data_used_for_training))
-		# Ensure at least 1 in train and at least 1 in test
-		train_count_from_frac = max(1, min(train_count_from_frac, n_samples - 1))
+	n_samples = len(texts)
+	fraction = args.data_used_for_training if (args.data_used_for_training and args.data_used_for_training > 0) else 0.75
+	if not (0 < fraction < 1):
+		raise ValueError("--data_used_for_training must be a fraction in (0,1)")
+	train_count_from_frac = int(round(n_samples * fraction))
+	# Ensure at least 1 in train and at least 1 in test
+	train_count_from_frac = max(1, min(train_count_from_frac, n_samples - 1))
 	# 2) Create the requested split, vectorize text, and train the classifier
 	vectorizer, model, train_idx, test_idx = train(
-		texts, labels, test_count=args.test_count, data_used_for_training=train_count_from_frac, binary=args.binary
+		texts, labels, data_used_for_training=train_count_from_frac, binary=args.binary
 	)
 	# 3) Persist model artifacts for downstream labeler inference
 	save_artifacts(vectorizer, model, args.out_dir)
