@@ -8,200 +8,122 @@ Xinyi Huang
 Jiayu Zhang
 - Policy Proposal: Online Recruitment Fraud Detection
 
-## Evaluation Results
-
-The labeler now achieves the following performance on the test dataset:
-
-- **Overall Accuracy**: 88.00% (132 out of 150 posts correctly labeled)
-- **Fraudulent Detection**: 
-  - Precision: 100% (no false positives)
-  - Recall: 78.57% (11 out of 14 fraudulent posts detected)
-  - F1 Score: 0.88
-- **Suspicious Detection**:
-  - Precision: 64.44%
-  - Recall: 93.55% (29 out of 31 suspicious posts detected)
-  - F1 Score: 0.76
-
-To reproduce these results, run:
-```bash
-python evaluate_labeler.py data_real_only.csv
-```
-
 ## Overview
+This project provides a Bluesky labeler that detects online recruitment fraud by labeling posts as:
+- `fraudulent-recruitment`
+- `suspicious-recruitment`
+- no label (legit)
 
-This implementation provides a Bluesky labeler that detects online recruitment fraud by identifying suspicious and fraudulent job postings. The labeler uses a hybrid approach combining rule-based pattern matching with a machine learning model (RandomForest classifier) to achieve 88% accuracy on real-world test data.
-
-## Files Submitted
-
-### Core Implementation
-- `pylabel/policy_proposal_labeler.py` - Main labeler implementation with ML model integration
-- `pylabel/label.py` - Helper functions for Bluesky API interactions
-- `evaluate_labeler.py` - Evaluation script for calculating metrics
-
-### Test Data
-- `data.csv` - Combined test dataset (215 posts: 150 real-world + 65 mock)
-- `data_real_only.csv` - Real-world posts only (150 posts, used for 88% accuracy evaluation)
-
-### ML Model Files
-- `fraud_model.pkl` - Trained RandomForest classifier
-- `vectorizer.pkl` - TF-IDF vectorizer for text feature extraction
+It includes:
+- A training script that learns from labeled text (`cleaned_training_data.csv`)
+- A labeler that fetches real posts via the Bluesky API and predicts labels
+- An evaluator that reports accuracy, precision, recall, and F1
 
 ## Setup
+1) Python and env
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+Recommended: Python 3.12 (some libs are not 3.14-ready).
 
-### Prerequisites
-1. Python 3.8+
-2. Required packages (install via `pip install`):
-   - `atproto`
-   - `pandas`
-   - `python-dotenv`
-   - `scikit-learn` (for ML model)
-   - `numpy` (for ML model)
-
-### Environment Variables
-Create a `.env` file in the `bluesky-assign3` directory with:
+2) Environment variables
+Create `.env` in `bluesky-assign3/`:
 ```
 USERNAME=your_bluesky_username
 PW=your_bluesky_password
 ```
 
-## How to Run
+## Training (Step 1)
+Input file: `cleaned_training_data.csv` with columns:
+- `text`: post text
+- `label`: 0=legit, 1=suspicious, 2=fraudulent
 
-### 1. Prepare Test Data
-The test data file `data.csv` is already prepared with 215 posts combining both real-world and mock datasets.
+Script: `train_model.py`
 
-### 2. Evaluate the Labeler
-Run the evaluation script on the test data:
+Flags:
+- `--data`: Path to training CSV (default: `cleaned_training_data.csv`)
+- `--out_dir`: Directory to save artifacts (default: `.`)
+- `--data_used_for_training`: Fraction in (0,1). If >0, randomly sample that fraction of rows for training (stratified when possible); the rest form the test set. Overrides `--test_count`.
+- `--test_count`: If `--data_used_for_training` is 0, hold out this many rows for test (stratified when possible). Default 100.
+- `--binary`: Collapse labels 1 and 2 into a single positive class (1=recruitment-risk, 0=legit).
+
+Artifacts saved:
+- `vectorizer.pkl`
+- `fraud_model.pkl`
+- `train_test_split_indices.csv`
+- `train_set.csv`, `test_set.csv`
+
+Run (examples):
+Binary, train on 75% of data (random stratified), test on the rest:
 ```bash
-python evaluate_labeler.py data.csv
+python train_model.py --data cleaned_training_data.csv --out_dir . --data_used_for_training 0.75 --binary
 ```
 
-This will:
-- Load all posts from `data.csv`
-- Run the labeler on each post
-- Calculate accuracy, precision, recall, and F1 scores
-- Display detailed results including mismatches
+Console output includes validation accuracy and a classification report (precision/recall/F1).
 
-### 3. Emit Labels (Optional)
-To actually emit labels to Bluesky (use with caution):
+## Testing (Step 2)
+You can test the trained model in two separate ways. Choose one or run both:
+
+1) Offline evaluation on held-out CSV (fast iteration)
+
+Use the artifacts from training to evaluate a CSV that has `text,label`:
+
 ```bash
-python evaluate_labeler.py data.csv --emit_labels
+# Evaluate on the held-out test split produced by training
+```
+python test_model.py --data test_set.csv --binary
+
+Accuracy: 0.8293
+Precision: 0.8182
+Recall: 0.6429
+F1: 0.7200
 ```
 
-**Warning**: Only use `--emit_labels` when you're confident in your labeler's accuracy!
+Outputs:
+- Accuracy
+- Precision/recall/F1 (binary or 3-class, matching your choice)
 
-## Labeler Implementation Details
+2) Live evaluation on real posts (recommended for final reporting)
 
-### Detection Signals
+Script: `evaluate_labeler.py`
 
-The labeler uses multiple signals to detect recruitment fraud:
+Input CSV format:
+- `URL`: Bluesky post URL
+- `Labels`: JSON array of expected labels, e.g., `[]`, `["suspicious-recruitment"]`, `["fraudulent-recruitment"]`
 
-1. **Textual Signals:**
-   - Urgency keywords ("urgent", "hiring now", "limited time")
-   - Unrealistic salary patterns (e.g., "$3,000/week")
-   - Payment request keywords ("upfront fee", "training kit")
-   - Off-platform communication requests ("WhatsApp", "DM me")
-   - Personal information requests ("SSN", "bank account")
-   - Vague job descriptions ("work from home", "easy money")
-   - Excessive emoji usage
+Run:
+```bash
+python evaluate_labeler.py data_real_only_v2_prepared.csv
+```
 
-2. **URL Signals:**
-   - URL shorteners (bit.ly, tinyurl.com, etc.)
-   - Suspicious domain patterns
+What it does:
+- Logs into Bluesky with `USERNAME`/`PW`
+- Fetches each post by URL
+- Runs the labeler and compares predicted vs expected
+- Prints:
+  - Overall accuracy
+  - Precision/recall/F1 for `fraudulent-recruitment` and `suspicious-recruitment`
+  - Mismatched rows (for debugging)
 
-### Label Types
+Optional:
+```bash
+python evaluate_labeler.py data_real_only_v2_prepared.csv --emit_labels
+```
+This will emit labels via the labeler account (use only if you intend to publish labels).
 
-- `fraudulent-recruitment`: High confidence fraud detection (threshold ≥ 0.3)
-- `suspicious-recruitment`: Medium confidence suspicious content (threshold ≥ 0.2)
-- No label: Legitimate or low-risk content
+2) Offline sanity-check on the held-out test split
 
-### Implementation Approach
+After training, review `test_set.csv` (created by `train_model.py`) for the exact examples used in validation. The training script already prints validation accuracy and a classification report for this split. Use this for quick iteration; use the live evaluation above for end-to-end results.
 
-The labeler uses a **hybrid approach** combining:
-
-1. **Rule-Based Detection**: Pattern matching on text and URLs
-   - Payment requests: 25% weight
-   - PII requests: 20% weight
-   - Unrealistic salaries: 15% weight
-   - Off-platform requests: 15% weight
-   - Other indicators: 5-10% each
-
-2. **Machine Learning Model**: RandomForest classifier
-   - Trained on 149 labeled posts
-   - Uses TF-IDF text features + rule-based features
-   - Combines with rule-based scores (60% ML, 40% rules)
-   - Achieves 88% accuracy on test set
-
-## Test Data
-
-We use **two datasets** for comprehensive evaluation:
-
-### Original Source Files 
-The original source files are located in the parent directory (`../`):
-- `Cleaned_BlueSky_Data_Collection.csv` - 995 real-world Bluesky posts with labels
-- `Cleaned_mock_data.csv` - 997 manually created mock job postings with labels
-
-**Note**: These source files are provided for reference. The processed test datasets (`data.csv` and `data_real_only.csv`) are the files used for evaluation.
-
-### Processed Test Datasets
-
-#### Real-World Data (`data_real_only.csv`)
-- 150 posts selected from actual Bluesky posts
-- Includes URLs for API testing
-- Contains legitimate, suspicious, and fraudulent examples
-- Used for the 88% accuracy evaluation
-
-#### Mock/Synthetic Data
-- 65 additional manually created mock job postings (selected from source)
-- Text-only (no URLs)
-- Focuses on fraudulent and suspicious patterns
-- Provides more examples of fraud for comprehensive testing
-
-#### Combined Dataset (`data.csv`)
-The `data.csv` file contains **215 posts** combining selected samples from both source datasets:
-- **105 legitimate posts** (no label) - all from real-world data
-- **56 suspicious posts** (`suspicious-recruitment`) - 31 real + 25 mock
-- **54 fraudulent posts** (`fraudulent-recruitment`) - 14 real + 40 mock
-
-This combination provides:
-- More diverse fraud examples for better evaluation
-- Both real-world and controlled scenarios
-- Better balance between legitimate and fraudulent content
-
-## Evaluation Metrics
-
-The evaluation script calculates:
-- **Accuracy**: Exact label match rate
-- **Precision**: True positives / (True positives + False positives)
-- **Recall**: True positives / (True positives + False negatives)
-- **F1 Score**: Harmonic mean of precision and recall
-
-Metrics are calculated separately for:
-- Fraudulent recruitment detection
-- Suspicious recruitment detection
-
-## Limitations and Future Improvements
-
-### Current Limitations
-1. Text-based detection only (no account metadata analysis)
-2. Fixed thresholds (could be tuned with more data)
-3. Limited to English language patterns
-4. No behavioral analysis (account age, posting frequency)
-
-### Future Improvements
-1. Integrate account metadata (follower ratios, account age, posting frequency)
-2. Use transformer models (BERT, etc.) for better text classification
-3. Implement behavioral analysis (account patterns, posting history)
-4. Add network analysis (coordinated activity detection)
-5. Multi-language support
-6. Dynamic threshold adjustment based on context
-7. Real-time model retraining with new data
+## Notes and Tips
+- If some posts cannot be fetched (deleted/private), predictions may be empty for those rows.
+- For better recall, train with more “hard negatives” (legit posts that look scammy) and clear positives (fees/off-platform/unrealistic pay).
+- You can switch between 3-class and binary training via `--binary`, then evaluate with the same evaluator.
 
 ## Ethical Considerations
-
-This labeler is designed to help users identify potentially fraudulent job postings, but:
-- **False positives** could harm legitimate small businesses
-- **False negatives** could expose users to scams
-- The labeler uses "suspicious" and "fraudulent" labels rather than definitive "scam" labels to allow user judgment
-- Users can adjust visibility settings (Warn, Hide, Show) based on their preferences
-
+- False positives can harm legitimate posters; false negatives can expose users to scams.
+- We use “suspicious” vs “fraudulent” to convey confidence, not certainty.
+- Adjust thresholds and training data to balance safety and precision.
 
