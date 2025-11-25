@@ -13,34 +13,7 @@ Group Members: Jiayu Zhang (jz2344), Xinyi Huang (xh453), Eva Huang (lh764), Gra
 - requirements.txt: Python dependencies for this project.
 - README_ASSIGNMENT3.md: This file with group details, file descriptions, and run instructions.
 
-## End-to-end overview
-1) Get data, clean data
-- Source: `cleaned_training_data.csv` with columns `text` and integer `label` (0=legit, 1=suspicious, 2=fraudulent).
-- Basic cleaning enforced by code: missing/NaN `text` dropped, labels cast to int; script validates required columns.
-- After training, the split is saved to `train_test_split_indices.csv` and explicit `train_set.csv` / `test_set.csv` files for reproducibility.
-  - These are written under `data/` by default.
-
-2) Train model (flags control behavior)
-- Run `train_model.py` with:
-  - `--data`: input CSV path (default: `data/cleaned_training_data.csv`)
-  - `--out_dir`: where to save artifacts (default: `.`; writes to `model_files/` and `data/`)
-  - `--data_used_for_training <fraction in (0,1)>`: fraction for training (stratified); remainder becomes test. Defaults to 0.75 if omitted.
-  - `--binary`: collapse labels {1,2} → 1 (recruitment‑risk), 0 stays legit; omit to train 3‑class.
-- Outputs: `model_files/vectorizer.pkl`, `model_files/fraud_model.pkl`, `data/train_test_split_indices.csv`, `data/train_set.csv`, `data/test_set.csv`.
-- Prints training‑set performance only (accuracy, precision, recall, F1 on training split).
-
-3) Test model (flags control evaluation mode)
-- Run `test_model.py` with:
-  - `--data data/test_set.csv` (fast path) or `--data data/cleaned_training_data.csv` (auto-filter to test indices).
-  - `--binary` to evaluate as 2‑tier risk vs legit; omit for 3‑class.
-- Enforces test‑only evaluation (no training rows). Reports overall Accuracy, Precision, Recall, F1 and a classification report.
-
-4) Diagnostics and results
-- Prints short text previews for qualitative examples: true negatives/positives and false negatives/positives (2–3 each).
-- Use these examples to refine labels, add hard negatives/positives, or adjust features/thresholds.
-- Artifacts are versionable locally (pickles are ignored by git per `.gitignore`) and can be regenerated deterministically from the same CSV and flags.
-
-## How to run tests
+## How to run
 1) Create env and install deps
 ```bash
 cd /bluesky-assign3
@@ -76,3 +49,30 @@ The test report prints:
 - Full classification report (binary or 3‑class)
 - 2–3 qualitative examples for each: correct SAFE, correct SCAM, false negative, false positive
 
+
+## End-to-end overview
+1) Get data, clean data
+- Source: `cleaned_training_data.csv` with columns `text` and integer `label` (0=legit, 1=suspicious, 2=fraudulent).
+- Basic cleaning enforced by code: missing/NaN `text` dropped, labels cast to int; script validates required columns.
+- After training, the split is saved to `train_test_split_indices.csv` and explicit `train_set.csv` / `test_set.csv` files for reproducibility.
+  - These are written under `data/` by default.
+
+2) Train model (flags control behavior)
+- Run `train_model.py` with:
+  - `--data`: input CSV path (default: `data/cleaned_training_data.csv`)
+  - `--out_dir`: where to save artifacts (default: `.`; writes to `model_files/` and `data/`)
+  - `--data_used_for_training <fraction in (0,1)>`: fraction for training (stratified); remainder becomes test. Defaults to 0.75 if omitted.
+  - `--binary`: collapse labels {1,2} → 1 (recruitment‑risk), 0 stays legit; omit to train 3‑class.
+- Outputs: `model_files/vectorizer.pkl`, `model_files/fraud_model.pkl`, `data/train_test_split_indices.csv`, `data/train_set.csv`, `data/test_set.csv`.
+- Prints training‑set performance only (accuracy, precision, recall, F1 on training split).
+
+3) Test model (flags control evaluation mode)
+- Run `test_model.py` with:
+  - `--data data/test_set.csv` (fast path) or `--data data/cleaned_training_data.csv` (auto-filter to test indices).
+  - `--binary` to evaluate as 2‑tier risk vs legit; omit for 3‑class.
+- Enforces test‑only evaluation (no training rows). Reports overall Accuracy, Precision, Recall, F1 and a classification report.
+
+4) Diagnostics and results
+- Prints short text previews for qualitative examples: true negatives/positives and false negatives/positives (2–3 each).
+- Use these examples to refine labels, add hard negatives/positives, or adjust features/thresholds.
+- Artifacts are versionable locally (pickles are ignored by git per `.gitignore`) and can be regenerated deterministically from the same CSV and flags.
